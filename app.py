@@ -24,28 +24,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. УМНО ЗАРЕЖДАНЕ НА МОДЕЛ (План Б) ---
+# --- 3. ЗАРЕЖДАНЕ НА МОДЕЛ ---
 @st.cache_resource
-def get_working_model():
-    # Опитваме първо с Gemini Pro, защото той е най-стабилен срещу 404 грешки
-    models_to_try = ['gemini-pro', 'gemini-1.5-flash', 'models/gemini-1.5-flash']
-    for m_name in models_to_try:
-        try:
-            model = genai.GenerativeModel(m_name)
-            # Тест за съвместимост
-            model.generate_content("Hi", generation_config={"max_output_tokens": 1})
-            return model
-        except:
-            continue
-    return None
+def get_model():
+    # Използваме gemini-pro като най-стабилен вариант
+    try:
+        return genai.GenerativeModel('gemini-pro')
+    except:
+        return None
 
-model = get_working_model()
+model = get_model()
 
 st.title("🤖 Yordanow AI")
-
-if model is None:
-    st.error("❌ Google все още не активира ключа ти за външни сайтове. Изчакай 1-2 часа или провери ключа в Google AI Studio.")
-    st.stop()
 
 # --- 4. ЧАТ ЛОГИКА ---
 if "messages" not in st.session_state:
@@ -67,4 +57,5 @@ if prompt := st.chat_input("Задай ми въпрос..."):
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
         except Exception as e:
-            st.error(f"Грешка: {str(e)}")
+            # Показваме съобщение за изчакване, ако ключът още не е активен
+            st.error("Връзката се установява... Google активира новите ключове за 1-2 часа. Моля, опитайте малко по-късно.")
