@@ -2,70 +2,55 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- 1. НАСТРОЙКА НА API ---
-# ВНИМАНИЕ: Не споделяй този ключ публично!
 GOOGLE_API_KEY = "AIzaSyDh9IbmNyCxePvhzvXne_G2ndgK2zRMuQw"
 genai.configure(api_key=GOOGLE_API_KEY)
 
 # --- 2. ИНСТРУКЦИИ ЗА ЛИЧНОСТ ---
-SYSTEM_INSTRUCTION = """
-Ти си Yordanow AI - високоинтелигентен изкуствен интелект, създаден от Yordanowz.com.
-Твоят стил на общуване е:
-1. Полезен, директен и професионален.
-2. Винаги отговаряш на езика, на който ти говорят (основно български).
-3. Пишеш чист код, решаваш задачи и даваш съвети за бизнес.
-4. Представяш се като Yordanow AI.
-"""
+SYSTEM_INSTRUCTION = "Ти си Yordanow AI - интелигентен асистент на български език."
 
-# Използваме 'models/gemini-1.5-flash' - това решава 404 грешката в повечето случаи
-try:
-    model = genai.GenerativeModel(
-        model_name='models/gemini-1.5-flash',
-        system_instruction=SYSTEM_INSTRUCTION
-    )
-except:
-    model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
-        system_instruction=SYSTEM_INSTRUCTION
-    )
+# Функция за намиране на работещ модел
+@st.cache_resource
+def load_model():
+    # Списък с възможни имена на модели (от най-новия към по-старите)
+    model_names = ['gemini-1.5-flash', 'models/gemini-1.5-flash', 'gemini-pro']
+    
+    for name in model_names:
+        try:
+            m = genai.GenerativeModel(model_name=name, system_instruction=SYSTEM_INSTRUCTION)
+            # Тестово съобщение, за да видим дали работи
+            m.generate_content("test", generation_config={"max_output_tokens": 1})
+            return m
+        except:
+            continue
+    return None
 
-# --- 3. ДИЗАЙН НА СТРАНИЦАТА ---
-st.set_page_config(page_title="Yordanow AI", page_icon="🤖", layout="centered")
+model = load_model()
+
+# --- 3. ДИЗАЙН ---
+st.set_page_config(page_title="Yordanow AI", page_icon="🤖")
 
 st.markdown("""
 <style>
-    /* Пълно изчистване на Streamlit интерфейса */
-    header {visibility: hidden !important;}
-    footer {display: none !important;}
-    .stAppDeployButton {display:none !important;}
-    #MainMenu {visibility: hidden !important;}
-    div[data-testid="stStatusWidget"] {display: none !important;}
-
+    header, footer, .stAppDeployButton {visibility: hidden !important;}
     .main { background-color: #0e1117; color: white; }
-    
-    /* Стил на чат балончетата */
-    .stChatMessage { 
-        border-radius: 15px; 
-        margin-bottom: 10px; 
-        border: 1px solid #30363d;
-        background-color: rgba(255, 255, 255, 0.03);
-    }
+    .stChatMessage { border-radius: 15px; border: 1px solid #30363d; background: rgba(255,255,255,0.03); }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🤖 Yordanow AI")
-st.write("Как мога да ти помогна днес?")
 
-# --- 4. ПАМЕТ НА БОТА ---
+if model is None:
+    st.error("❌ Грешка: Не бе намерен активен модел. Провери дали API ключът е активиран в Google AI Studio.")
+    st.stop()
+
+# --- 4. ЧАТ СЕСИЯ ---
 if "chat_session" not in st.session_state:
     st.session_state.chat_session = model.start_chat(history=[])
 
-# Показваме историята
 for message in st.session_state.chat_session.history:
-    role = "assistant" if message.role == "model" else "user"
-    with st.chat_message(role):
+    with st.chat_message("assistant" if message.role == "model" else "user"):
         st.markdown(message.parts[0].text)
 
-# --- 5. ЛОГИКА НА РАЗГОВОРА ---
 if prompt := st.chat_input("Пиши тук..."):
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -73,27 +58,11 @@ if prompt := st.chat_input("Пиши тук..."):
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         full_response = ""
-        
         try:
-            # Стрийминг на отговора (пише в реално време)
             response = st.session_state.chat_session.send_message(prompt, stream=True)
-            
             for chunk in response:
-                if chunk.text:
-                    full_response += chunk.text
-                    response_placeholder.markdown(full_response + "▌")
-            
+                full_response += chunk.text
+                response_placeholder.markdown(full_response + "▌")
             response_placeholder.markdown(full_response)
-            
         except Exception as e:
-            # Ако пак има 404, изписваме по-ясно инфо
-            st.error(f"Грешка: Моделът не е намерен или API ключът е невалиден. Провери името на модела.")
-
-# Странична лента
-with st.sidebar:
-    st.title("Yordanow AI")
-    st.write("Твоят личен асистент.")
-    st.markdown("---")
-    if st.button("Изчисти чата"):
-        st.session_state.chat_session = model.start_chat(history=[])
-        st.rerun()
+            st.error(f"Грешка при разговор: {e}")
