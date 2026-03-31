@@ -1,15 +1,28 @@
 import streamlit as st
 import google.generativeai as genai
 
-# --- 1. НАСТРОЙКА ---
-# Твоят API Ключ
-GOOGLE_API_KEY = "AIzaSyDh9IbmNyCxePvhzvXne_G2ndgK2zRMuQw"
-genai.configure(api_key=GOOGLE_API_KEY)
+# --- 1. CONFIG ---
+# Директно използване на твоя ключ от снимката
+API_KEY = "AIzaSyDh9IbmNyCxePvhzvXne_G2ndgK2zRMuQw"
+genai.configure(api_key=API_KEY)
 
-# --- 2. ДИЗАЙН ---
+# --- 2. MODEL SETUP ---
+# Пробваме най-сигурния начин за зареждане
+@st.cache_resource
+def get_ai_model():
+    try:
+        # Използваме пълното име на модела
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        return model
+    except Exception as e:
+        return str(e)
+
+model = get_ai_model()
+
+# --- 3. UI ---
 st.set_page_config(page_title="Yordanow AI", page_icon="🤖")
 
-# Скриваме всичко излишно
+# Скриване на всичко излишно (Deploy, Footer и т.н.)
 st.markdown("""
 <style>
     header, footer, .stAppDeployButton {visibility: hidden !important;}
@@ -20,47 +33,33 @@ st.markdown("""
 
 st.title("🤖 Yordanow AI")
 
-# --- 3. ЛОГИКА ЗА МОДЕЛА ---
-# Опитваме директно с най-простия метод без сложни инсталации
-if "model" not in st.session_state:
-    try:
-        # Пробваме 'gemini-pro', който е най-съвместим със стари библиотеки
-        st.session_state.model = genai.GenerativeModel('gemini-pro')
-    except:
-        st.session_state.model = None
-
-if "chat" not in st.session_state:
-    if st.session_state.model:
-        st.session_state.chat = st.session_state.model.start_chat(history=[])
-    else:
-        st.session_state.chat = None
-
-# --- 4. ЧАТ ИНТЕРФЕЙС ---
-if st.session_state.chat is None:
-    st.error("❌ Грешка: Проблем с връзката към Google AI. Опитай да обновиш страницата или провери ключа си.")
+# Проверка дали моделът е зареден
+if isinstance(model, str):
+    st.error(f"❌ Грешка при инициализация: {model}")
+    st.info("💡 Провери дали в 'requirements.txt' си сложил правилно версията на библиотеката.")
     st.stop()
 
-# Показване на историята
-for message in st.session_state.chat.history:
-    with st.chat_message("assistant" if message.role == "model" else "user"):
-        st.markdown(message.parts[0].text)
+# --- 4. CHAT LOGIC ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Показване на съобщенията
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 # Вход от потребителя
-if prompt := st.chat_input("Пиши тук..."):
+if prompt := st.chat_input("Задай ми въпрос..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            # Използваме стандартен отговор вместо стрийминг за по-голяма стабилност
-            response = st.session_state.chat.send_message(prompt)
-            st.markdown(response.text)
+            # Използваме директно генериране
+            response = model.generate_content(prompt)
+            answer = response.text
+            st.markdown(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
         except Exception as e:
-            st.error(f"Грешка при генериране: {e}")
-
-# Странична лента
-with st.sidebar:
-    st.title("Yordanow AI")
-    if st.button("Изчисти чата"):
-        st.session_state.chat = st.session_state.model.start_chat(history=[])
-        st.rerun()
+            st.error(f"Грешка при генериране: {str(e)}")
