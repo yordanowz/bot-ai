@@ -1,55 +1,52 @@
 import streamlit as st
 import google.generativeai as genai
+import os
 
 # --- 1. CONFIG ---
 API_KEY = "AIzaSyDh9IbmNyCxePvhzvXne_G2ndgK2zRMuQw"
+# Насилствено задаваме API версия v1, за да избегнем 404 грешката
+os.environ["GOOGLE_API_USE_MTLS"] = "never" 
 genai.configure(api_key=API_KEY)
 
-# --- 2. UI И ПЪЛНО ИЗЧИСТВАНЕ ---
+# --- 2. ПЪЛНО ИЗЧИСТВАНЕ НА ИНТЕРФЕЙСА ---
 st.set_page_config(page_title="Yordanow AI", page_icon="🤖")
 
 st.markdown("""
 <style>
-    /* 1. Скрива абсолютно всички стандартни Streamlit компоненти */
+    /* Премахва хедъра, фуутъра и бутона Deploy */
     header {visibility: hidden !important;}
     footer {display: none !important;}
+    .stAppDeployButton {display:none !important;}
     #MainMenu {visibility: hidden !important;}
-    .stDeployButton {display:none !important;}
-    div.stAppDeployButton {display: none !important;}
     
-    /* 2. Скрива логото на Streamlit (червеното кръгче долу вдясно) */
+    /* Премахва логото на Streamlit долу вдясно (червеното кръгче) */
     div[data-testid="stStatusWidget"] {display: none !important;}
     .stApp > header + div {display: none !important;}
     
-    /* 3. Дизайн на приложението */
+    /* Основен стил */
     .main { background-color: #0e1117; color: white; }
     .stChatMessage { border-radius: 15px; border: 1px solid #30363d; background: rgba(255,255,255,0.03); }
-    
-    /* Скрива и малкия "toolbar" при задържане на мишката върху елементи */
-    [data-testid="stElementToolbar"] {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. MODEL SETUP ---
+# --- 3. ЗАРЕЖДАНЕ НА МОДЕЛА ---
 @st.cache_resource
-def get_ai_model():
+def load_ai():
     try:
-        # Използваме 'gemini-1.5-flash' - вече трябва да работи с правилния requirements.txt
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        return model
+        # Използваме 'gemini-1.5-flash' - вече ще работи с новия requirements.txt
+        return genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         return str(e)
 
-model = get_ai_model()
+model = load_ai()
 
 st.title("🤖 Yordanow AI")
 
-# Проверка за грешки
 if isinstance(model, str):
-    st.error(f"Грешка при зареждане: {model}")
+    st.error(f"Грешка при свързване: {model}")
     st.stop()
 
-# --- 4. CHAT LOGIC ---
+# --- 4. ЧАТ ЛОГИКА ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -64,9 +61,11 @@ if prompt := st.chat_input("Задай ми въпрос..."):
 
     with st.chat_message("assistant"):
         try:
+            # Директно генериране
             response = model.generate_content(prompt)
             answer = response.text
             st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
         except Exception as e:
-            st.error(f"Грешка: {str(e)}")
+            st.error(f"Грешка при генериране: {str(e)}")
+            st.info("💡 Увери се, че си качил requirements.txt в GitHub!")
